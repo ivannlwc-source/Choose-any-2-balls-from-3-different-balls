@@ -1,1 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Choose Any Two (Click)</title>
+  <style>
+    :root{
+      --bg1:#0b1220; --bg2:#070b14;
+      --panel: rgba(255,255,255,.06);
+      --outline: rgba(255,255,255,.12);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.68);
+      --accent: #7dd3fc;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; min-height:100vh; display:grid; place-items:center;
+      background: radial-gradient(1200px 700px at 50% 20%, #172554 0%, var(--bg1) 45%, var(--bg2) 100%);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color:var(--text);
+      padding:16px;
+    }
+    .stage{
+      width:min(900px, 94vw);
+      aspect-ratio: 16 / 9;
+      border-radius:18px;
+      border:1px solid var(--outline);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      box-shadow: 0 22px 70px rgba(0,0,0,.35);
+      position:relative;
+      overflow:hidden;
+    }
 
+    .prompt{
+      position:absolute;
+      left:0; right:0;
+      top: 9%;
+      text-align:center;
+      font-weight:800;
+      letter-spacing:.2px;
+      font-size: clamp(18px, 2.6vw, 28px);
+      text-shadow: 0 8px 30px rgba(0,0,0,.45);
+      user-select:none;
+    }
+
+    .row{
+      position:absolute;
+      left:50%; top:35%;
+      transform: translate(-50%, -50%);
+      display:flex; gap: clamp(20px, 4.2vw, 56px);
+      align-items:center;
+    }
+
+    .ballBtn{
+      appearance:none;
+      border:0;
+      background: transparent;
+      padding:0;
+      cursor:pointer;
+      border-radius:999px;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ballBtn:focus-visible .ball{
+      box-shadow:
+        0 18px 28px rgba(0,0,0,.35),
+        inset -10px -14px 22px rgba(0,0,0,.35),
+        inset 10px 10px 18px rgba(255,255,255,.10),
+        0 0 0 4px rgba(125,211,252,.35);
+    }
+
+    .ball{
+      width:92px; height:92px; border-radius:50%;
+      position:relative;
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow:
+        0 18px 28px rgba(0,0,0,.35),
+        inset -10px -14px 22px rgba(0,0,0,.35),
+        inset 10px 10px 18px rgba(255,255,255,.10);
+      transform: translate3d(0,0,0) scale(1);
+      opacity:1;
+      filter: saturate(1.05);
+      will-change: transform, opacity, filter;
+      transition:
+        transform 520ms cubic-bezier(.22,.95,.26,1),
+        opacity 260ms ease,
+        filter 260ms ease;
+      user-select:none;
+    }
+    .ball::before{
+      content:"";
+      position:absolute;
+      left:18px; top:16px;
+      width:26px; height:26px;
+      border-radius:50%;
+      background: rgba(255,255,255,.55);
+      filter: blur(1px);
+      opacity:.75;
+    }
+
+    .red{ background: radial-gradient(circle at 30% 28%, #ffb4b4 0%, #ff4d4d 35%, #b11212 100%); }
+    .blue{ background: radial-gradient(circle at 30% 28%, #b9e5ff 0%, #4da3ff 35%, #0b3c88 100%); }
+    .green{ background: radial-gradient(circle at 30% 28%, #b9ffd3 0%, #3fe27a 35%, #0f5d2d 100%); }
+
+    .tray{
+      position:absolute;
+      left:50%;
+      bottom: 10%;
+      transform: translateX(-50%);
+      width: min(560px, calc(100% - 40px));
+      height: 150px;
+      border-radius: 18px;
+      border: 1px solid var(--outline);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      box-shadow: 0 18px 50px rgba(0,0,0,.25);
+      opacity:0;
+      transform: translateX(-50%) translateY(18px);
+      transition: opacity 260ms ease, transform 520ms cubic-bezier(.22,.95,.26,1);
+    }
+    .tray.on{
+      opacity:1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .slots{
+      position:absolute;
+      left:50%; top:52%;
+      transform: translate(-50%, -50%);
+      display:flex; gap:26px;
+      width: fit-content;
+    }
+    .slot{
+      width:92px; height:92px; border-radius:50%;
+      border: 1px dashed rgba(255,255,255,.18);
+      background: rgba(0,0,0,.14);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.22);
+      position:relative;
+    }
+    .slot.filled{
+      border-style: solid;
+      border-color: rgba(125,211,252,.35);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.22), 0 0 0 4px rgba(125,211,252,.10);
+    }
+
+    /* Visual states */
+    .selected{
+      transform: translate3d(0,-12px,0) scale(1.10);
+    }
+    .dim{
+      opacity:.32;
+      filter: saturate(.85) brightness(.92);
+      transform: translate3d(0,0,0) scale(.96);
+    }
+
+    /* Moved into tray via CSS vars */
+    .moved{
+      transform: translate3d(var(--tx,0px), var(--ty,0px), 0) scale(1.02);
+    }
+
+    .controls{
+      position:absolute;
+      left:50%;
+      top: calc(35% + 86px);
+      transform: translateX(-50%);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:center;
+      flex-wrap:wrap;
+      user-select:none;
+    }
+    .btn{
+      appearance:none;
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      font-weight:800;
+      letter-spacing:.2px;
+      cursor:pointer;
+      transition: transform .08s ease, background .2s ease, border-color .2s ease;
+    }
+    .btn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.24); }
+    .btn:active{ transform: translateY(1px); }
+    .btnPrimary{
+      background: rgba(125,211,252,.12);
+      border-color: rgba(125,211,252,.35);
+    }
+    .status{
+      font-size:12px;
+      color: var(--muted);
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.12);
+    }
+
+    .sr{
+      position:absolute !important;
+      width:1px;height:1px;
+      padding:0;margin:-1px;
+      overflow:hidden;clip:rect(0,0,0,0);
+      white-space:nowrap;border:0;
+    }
+
+    @media (max-width: 520px){
+      .ball, .slot{ width:72px; height:72px; }
+      .tray{ height: 130px; }
+      .controls{ top: calc(35% + 74px); }
+      .selected{ transform: translate3d(0,-10px,0) scale(1.10); }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="prompt" id="prompt">Pick any two</div>
+
+    <div class="row" id="row">
+      <button class="ballBtn" data-id="R" aria-pressed="false" aria-label="Red ball">
+        <div class="ball red" id="ballR"></div>
+      </button>
+      <button class="ballBtn" data-id="B" aria-pressed="false" aria-label="Blue ball">
+        <div class="ball blue" id="ballB"></div>
+      </button>
+      <button class="ballBtn" data-id="G" aria-pressed="false" aria-label="Green ball">
+        <div class="ball green" id="ballG"></div>
+      </button>
+    </div>
+
+    <div class="controls">
+      <button class="btn btnPrimary" id="confirm">Confirm</button>
+      <button class="btn" id="reset">Reset</button>
+      <div class="status" id="status">0 / 2</div>
+    </div>
+
+    <div class="tray" id="tray" aria-label="Selected tray">
+      <div class="slots">
+        <div class="slot" id="slot0" aria-hidden="true"></div>
+        <div class="slot" id="slot1" aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <div class="sr" id="sr" aria-live="polite"></div>
+  </div>
+
+  <script>
+    const btns = Array.from(document.querySelectorAll('.ballBtn'));
+    const balls = {
+      R: document.getElementById('ballR'),
+      B: document.getElementById('ballB'),
+      G: document.getElementById('ballG'),
+    };
+    const tray = document.getElementById('tray');
+    const slot0 = document.getElementById('slot0');
+    const slot1 = document.getElementById('slot1');
+    const status = document.getElementById('status');
+    const confirmBtn = document.getElementById('confirm');
+    const resetBtn = document.getElementById('reset');
+    const sr = document.getElementById('sr');
+
+    let selected = new Set();
+    let locked = false;
+
+    function announce(t){ sr.textContent = t; }
+
+    function updateUI(){
+      status.textContent = `${selected.size} / 2`;
+      btns.forEach(b=>{
+        const id = b.dataset.id;
+        b.setAttribute('aria-pressed', selected.has(id) ? 'true' : 'false');
+      });
+
+      // highlight selected; dim others only after 2 are picked (before confirm)
+      const allIds = ['R','B','G'];
+      allIds.forEach(id=>{
+        balls[id].classList.toggle('selected', selected.has(id) && !locked);
+        balls[id].classList.remove('dim');
+      });
+
+      if(!locked){
+        if(selected.size === 2){
+          allIds.forEach(id=>{
+            if(!selected.has(id)) balls[id].classList.add('dim');
+          });
+        }
+      }
+      confirmBtn.disabled = locked || selected.size !== 2;
+      confirmBtn.style.opacity = confirmBtn.disabled ? .55 : 1;
+      confirmBtn.style.cursor = confirmBtn.disabled ? 'not-allowed' : 'pointer';
+    }
+
+    function resetAll(){
+      locked = false;
+      selected.clear();
+      tray.classList.remove('on');
+      slot0.classList.remove('filled');
+      slot1.classList.remove('filled');
+      for(const id of ['R','B','G']){
+        const el = balls[id];
+        el.classList.remove('selected','dim','moved');
+        el.style.removeProperty('--tx');
+        el.style.removeProperty('--ty');
+      }
+      announce('Reset.');
+      updateUI();
+    }
+
+    function toggleSelect(id){
+      if(locked) return;
+      if(selected.has(id)){
+        selected.delete(id);
+        announce('Unselected.');
+      } else {
+        if(selected.size >= 2) return; // max 2
+        selected.add(id);
+        announce('Selected.');
+      }
+      updateUI();
+    }
+
+    function moveBallToSlot(ballEl, slotEl){
+      const b = ballEl.getBoundingClientRect();
+      const s = slotEl.getBoundingClientRect();
+      const bcx = b.left + b.width/2;
+      const bcy = b.top  + b.height/2;
+      const scx = s.left + s.width/2;
+      const scy = s.top  + s.height/2;
+      const dx = (scx - bcx);
+      const dy = (scy - bcy);
+
+      ballEl.style.setProperty('--tx', dx.toFixed(1) + 'px');
+      ballEl.style.setProperty('--ty', dy.toFixed(1) + 'px');
+      ballEl.classList.add('moved');
+    }
+
+    function confirm(){
+      if(locked || selected.size !== 2) return;
+      locked = true;
+
+      tray.classList.add('on');
+
+      // keep unpicked dim
+      const allIds = ['R','B','G'];
+      allIds.forEach(id=>{
+        if(!selected.has(id)) balls[id].classList.add('dim');
+        balls[id].classList.remove('selected');
+      });
+
+      // move chosen into tray slots (order: R,B,G)
+      const chosen = Array.from(selected).sort((a,b)=> ['R','B','G'].indexOf(a) - ['R','B','G'].indexOf(b));
+      const first = chosen[0], second = chosen[1];
+
+      // wait a tick for tray to slide in, then compute deltas
+      setTimeout(()=>{
+        moveBallToSlot(balls[first], slot0);
+        moveBallToSlot(balls[second], slot1);
+        slot0.classList.add('filled');
+        slot1.classList.add('filled');
+      }, 40);
+
+      announce('Confirmed.');
+      updateUI();
+    }
+
+    // click handlers
+    btns.forEach(b=>{
+      b.addEventListener('click', ()=> toggleSelect(b.dataset.id));
+      b.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter' || e.key === ' '){
+          e.preventDefault();
+          toggleSelect(b.dataset.id);
+        }
+      });
+    });
+
+    confirmBtn.addEventListener('click', confirm);
+    resetBtn.addEventListener('click', resetAll);
+
+    // initial
+    updateUI();
+
+    // keep tray move accurate on resize if locked
+    window.addEventListener('resize', ()=>{
+      if(!locked) return;
+      const chosen = Array.from(selected).sort((a,b)=> ['R','B','G'].indexOf(a) - ['R','B','G'].indexOf(b));
+      if(chosen.length !== 2) return;
+      // recompute
+      moveBallToSlot(balls[chosen[0]], slot0);
+      moveBallToSlot(balls[chosen[1]], slot1);
+    });
+  </script>
+</body>
+</html>
