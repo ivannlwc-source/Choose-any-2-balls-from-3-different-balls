@@ -7,7 +7,6 @@
   <style>
     :root{
       --bg1:#0b1220; --bg2:#070b14;
-      --panel: rgba(255,255,255,.06);
       --outline: rgba(255,255,255,.12);
       --text: rgba(255,255,255,.92);
       --muted: rgba(255,255,255,.68);
@@ -62,6 +61,17 @@
       outline: none;
       -webkit-tap-highlight-color: transparent;
     }
+
+    /* Wrapper: ONLY handles moving translation */
+    .ballWrap{
+      will-change: transform;
+      transform: translate3d(0,0,0);
+      transition: transform 520ms cubic-bezier(.22,.95,.26,1);
+    }
+    .ballWrap.moved{
+      transform: translate3d(var(--tx,0px), var(--ty,0px), 0);
+    }
+
     .ballBtn:focus-visible .ball{
       box-shadow:
         0 18px 28px rgba(0,0,0,.35),
@@ -70,6 +80,7 @@
         0 0 0 4px rgba(125,211,252,.35);
     }
 
+    /* Inner ball: free to scale/dim without affecting move math */
     .ball{
       width:92px; height:92px; border-radius:50%;
       position:relative;
@@ -83,7 +94,7 @@
       filter: saturate(1.05);
       will-change: transform, opacity, filter;
       transition:
-        transform 520ms cubic-bezier(.22,.95,.26,1),
+        transform 260ms cubic-bezier(.22,.95,.26,1),
         opacity 260ms ease,
         filter 260ms ease;
       user-select:none;
@@ -102,6 +113,13 @@
     .red{ background: radial-gradient(circle at 30% 28%, #ffb4b4 0%, #ff4d4d 35%, #b11212 100%); }
     .blue{ background: radial-gradient(circle at 30% 28%, #b9e5ff 0%, #4da3ff 35%, #0b3c88 100%); }
     .green{ background: radial-gradient(circle at 30% 28%, #b9ffd3 0%, #3fe27a 35%, #0f5d2d 100%); }
+
+    .selected .ball{ transform: translate3d(0,-12px,0) scale(1.10); }
+    .dim .ball{
+      opacity:.32;
+      filter: saturate(.85) brightness(.92);
+      transform: translate3d(0,0,0) scale(.96);
+    }
 
     .tray{
       position:absolute;
@@ -123,39 +141,26 @@
       transform: translateX(-50%) translateY(0);
     }
 
-    /* FIX: remove transform-based centering on .slots */
     .slots{
       position:absolute;
-      inset: 0;                 /* fill tray */
+      inset:0;
       display:flex;
       gap:26px;
-      align-items:center;       /* vertical center */
-      justify-content:center;   /* horizontal center */
-      width: 100%;
+      align-items:center;
+      justify-content:center;
       pointer-events:none;
     }
-
     .slot{
       width:92px; height:92px; border-radius:50%;
       border: 1px dashed rgba(255,255,255,.18);
       background: rgba(0,0,0,.14);
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.22);
-      position:relative;
     }
     .slot.filled{
       border-style: solid;
       border-color: rgba(125,211,252,.35);
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.22), 0 0 0 4px rgba(125,211,252,.10);
     }
-
-    .selected{ transform: translate3d(0,-12px,0) scale(1.10); }
-    .dim{
-      opacity:.32;
-      filter: saturate(.85) brightness(.92);
-      transform: translate3d(0,0,0) scale(.96);
-    }
-
-    .moved{ transform: translate3d(var(--tx,0px), var(--ty,0px), 0) scale(1.02); }
 
     .controls{
       position:absolute;
@@ -180,10 +185,7 @@
       font-weight:800;
       letter-spacing:.2px;
       cursor:pointer;
-      transition: transform .08s ease, background .2s ease, border-color .2s ease;
     }
-    .btn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.24); }
-    .btn:active{ transform: translateY(1px); }
     .btnPrimary{
       background: rgba(125,211,252,.12);
       border-color: rgba(125,211,252,.35);
@@ -196,7 +198,6 @@
       border:1px solid rgba(255,255,255,.12);
       background: rgba(0,0,0,.12);
     }
-
     .sr{
       position:absolute !important;
       width:1px;height:1px;
@@ -209,23 +210,23 @@
       .ball, .slot{ width:72px; height:72px; }
       .tray{ height: 130px; }
       .controls{ top: calc(35% + 74px); }
-      .selected{ transform: translate3d(0,-10px,0) scale(1.10); }
+      .selected .ball{ transform: translate3d(0,-10px,0) scale(1.10); }
     }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div class="prompt" id="prompt">Pick any two</div>
+    <div class="prompt">Pick any two</div>
 
-    <div class="row" id="row">
+    <div class="row">
       <button class="ballBtn" data-id="R" aria-pressed="false" aria-label="Red ball">
-        <div class="ball red" id="ballR"></div>
+        <div class="ballWrap" id="wrapR"><div class="ball red" id="ballR"></div></div>
       </button>
       <button class="ballBtn" data-id="B" aria-pressed="false" aria-label="Blue ball">
-        <div class="ball blue" id="ballB"></div>
+        <div class="ballWrap" id="wrapB"><div class="ball blue" id="ballB"></div></div>
       </button>
       <button class="ballBtn" data-id="G" aria-pressed="false" aria-label="Green ball">
-        <div class="ball green" id="ballG"></div>
+        <div class="ballWrap" id="wrapG"><div class="ball green" id="ballG"></div></div>
       </button>
     </div>
 
@@ -247,10 +248,10 @@
 
   <script>
     const btns = Array.from(document.querySelectorAll('.ballBtn'));
-    const balls = {
-      R: document.getElementById('ballR'),
-      B: document.getElementById('ballB'),
-      G: document.getElementById('ballG'),
+    const wraps = {
+      R: document.getElementById('wrapR'),
+      B: document.getElementById('wrapB'),
+      G: document.getElementById('wrapG'),
     };
     const tray = document.getElementById('tray');
     const slot0 = document.getElementById('slot0');
@@ -265,26 +266,31 @@
 
     function announce(t){ sr.textContent = t; }
 
+    function setWrapState(id, cls, on){
+      const btn = btns.find(b => b.dataset.id === id);
+      if(!btn) return;
+      const wrap = wraps[id];
+      if(on) wrap.classList.add(cls); else wrap.classList.remove(cls);
+    }
+
     function updateUI(){
       status.textContent = `${selected.size} / 2`;
+
       btns.forEach(b=>{
         const id = b.dataset.id;
         b.setAttribute('aria-pressed', selected.has(id) ? 'true' : 'false');
+
+        // selection/dim live on the WRAP so inner ball can animate but move stays clean
+        wraps[id].classList.toggle('selected', selected.has(id) && !locked);
+        wraps[id].classList.remove('dim');
       });
 
-      const allIds = ['R','B','G'];
-      allIds.forEach(id=>{
-        balls[id].classList.toggle('selected', selected.has(id) && !locked);
-        balls[id].classList.remove('dim');
-      });
-
-      if(!locked){
-        if(selected.size === 2){
-          allIds.forEach(id=>{
-            if(!selected.has(id)) balls[id].classList.add('dim');
-          });
+      if(!locked && selected.size === 2){
+        for(const id of ['R','B','G']){
+          if(!selected.has(id)) wraps[id].classList.add('dim');
         }
       }
+
       confirmBtn.disabled = locked || selected.size !== 2;
       confirmBtn.style.opacity = confirmBtn.disabled ? .55 : 1;
       confirmBtn.style.cursor = confirmBtn.disabled ? 'not-allowed' : 'pointer';
@@ -296,11 +302,12 @@
       tray.classList.remove('on');
       slot0.classList.remove('filled');
       slot1.classList.remove('filled');
+
       for(const id of ['R','B','G']){
-        const el = balls[id];
-        el.classList.remove('selected','dim','moved');
-        el.style.removeProperty('--tx');
-        el.style.removeProperty('--ty');
+        const w = wraps[id];
+        w.classList.remove('selected','dim','moved');
+        w.style.removeProperty('--tx');
+        w.style.removeProperty('--ty');
       }
       announce('Reset.');
       updateUI();
@@ -319,16 +326,16 @@
       updateUI();
     }
 
-    function moveBallToSlot(ballEl, slotEl){
-      // compute from CURRENT rendered centers
-      const b = ballEl.getBoundingClientRect();
+    function moveWrapToSlot(wrapEl, slotEl){
+      // IMPORTANT: measure the WRAP (not the ball) and the SLOT, both in viewport coords
+      const w = wrapEl.getBoundingClientRect();
       const s = slotEl.getBoundingClientRect();
-      const dx = (s.left + s.width/2) - (b.left + b.width/2);
-      const dy = (s.top  + s.height/2) - (b.top  + b.height/2);
+      const dx = (s.left + s.width/2) - (w.left + w.width/2);
+      const dy = (s.top  + s.height/2) - (w.top  + w.height/2);
 
-      ballEl.style.setProperty('--tx', dx.toFixed(1) + 'px');
-      ballEl.style.setProperty('--ty', dy.toFixed(1) + 'px');
-      ballEl.classList.add('moved');
+      wrapEl.style.setProperty('--tx', dx.toFixed(1) + 'px');
+      wrapEl.style.setProperty('--ty', dy.toFixed(1) + 'px');
+      wrapEl.classList.add('moved');
     }
 
     function confirm(){
@@ -337,22 +344,22 @@
 
       tray.classList.add('on');
 
-      const allIds = ['R','B','G'];
-      allIds.forEach(id=>{
-        if(!selected.has(id)) balls[id].classList.add('dim');
-        balls[id].classList.remove('selected');
-      });
+      for(const id of ['R','B','G']){
+        wraps[id].classList.remove('selected');
+        if(!selected.has(id)) wraps[id].classList.add('dim');
+      }
 
-      const chosen = Array.from(selected).sort((a,b)=> ['R','B','G'].indexOf(a) - ['R','B','G'].indexOf(b));
-      const first = chosen[0], second = chosen[1];
+      const order = ['R','B','G'];
+      const chosen = Array.from(selected).sort((a,b)=> order.indexOf(a) - order.indexOf(b));
 
-      // wait until tray finishes its slide animation so slot positions are final
+      // wait until tray slide is finished before measuring slot positions
+      const trayMs = 520;
       setTimeout(()=>{
-        moveBallToSlot(balls[first], slot0);
-        moveBallToSlot(balls[second], slot1);
+        moveWrapToSlot(wraps[chosen[0]], slot0);
+        moveWrapToSlot(wraps[chosen[1]], slot1);
         slot0.classList.add('filled');
         slot1.classList.add('filled');
-      }, 560);
+      }, trayMs + 30);
 
       announce('Confirmed.');
       updateUI();
@@ -373,13 +380,13 @@
 
     updateUI();
 
-    // recompute on resize if locked
     window.addEventListener('resize', ()=>{
       if(!locked) return;
-      const chosen = Array.from(selected).sort((a,b)=> ['R','B','G'].indexOf(a) - ['R','B','G'].indexOf(b));
+      const order = ['R','B','G'];
+      const chosen = Array.from(selected).sort((a,b)=> order.indexOf(a) - order.indexOf(b));
       if(chosen.length !== 2) return;
-      moveBallToSlot(balls[chosen[0]], slot0);
-      moveBallToSlot(balls[chosen[1]], slot1);
+      moveWrapToSlot(wraps[chosen[0]], slot0);
+      moveWrapToSlot(wraps[chosen[1]], slot1);
     });
   </script>
 </body>
