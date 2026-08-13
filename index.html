@@ -107,7 +107,6 @@
       position:absolute;
       left:50%;
       bottom: 10%;
-      transform: translateX(-50%);
       width: min(560px, calc(100% - 40px));
       height: 150px;
       border-radius: 18px;
@@ -117,18 +116,25 @@
       opacity:0;
       transform: translateX(-50%) translateY(18px);
       transition: opacity 260ms ease, transform 520ms cubic-bezier(.22,.95,.26,1);
+      overflow: visible;
     }
     .tray.on{
       opacity:1;
       transform: translateX(-50%) translateY(0);
     }
+
+    /* FIX: remove transform-based centering on .slots */
     .slots{
       position:absolute;
-      left:50%; top:52%;
-      transform: translate(-50%, -50%);
-      display:flex; gap:26px;
-      width: fit-content;
+      inset: 0;                 /* fill tray */
+      display:flex;
+      gap:26px;
+      align-items:center;       /* vertical center */
+      justify-content:center;   /* horizontal center */
+      width: 100%;
+      pointer-events:none;
     }
+
     .slot{
       width:92px; height:92px; border-radius:50%;
       border: 1px dashed rgba(255,255,255,.18);
@@ -142,20 +148,14 @@
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.22), 0 0 0 4px rgba(125,211,252,.10);
     }
 
-    /* Visual states */
-    .selected{
-      transform: translate3d(0,-12px,0) scale(1.10);
-    }
+    .selected{ transform: translate3d(0,-12px,0) scale(1.10); }
     .dim{
       opacity:.32;
       filter: saturate(.85) brightness(.92);
       transform: translate3d(0,0,0) scale(.96);
     }
 
-    /* Moved into tray via CSS vars */
-    .moved{
-      transform: translate3d(var(--tx,0px), var(--ty,0px), 0) scale(1.02);
-    }
+    .moved{ transform: translate3d(var(--tx,0px), var(--ty,0px), 0) scale(1.02); }
 
     .controls{
       position:absolute;
@@ -168,6 +168,7 @@
       justify-content:center;
       flex-wrap:wrap;
       user-select:none;
+      z-index: 2;
     }
     .btn{
       appearance:none;
@@ -271,7 +272,6 @@
         b.setAttribute('aria-pressed', selected.has(id) ? 'true' : 'false');
       });
 
-      // highlight selected; dim others only after 2 are picked (before confirm)
       const allIds = ['R','B','G'];
       allIds.forEach(id=>{
         balls[id].classList.toggle('selected', selected.has(id) && !locked);
@@ -312,7 +312,7 @@
         selected.delete(id);
         announce('Unselected.');
       } else {
-        if(selected.size >= 2) return; // max 2
+        if(selected.size >= 2) return;
         selected.add(id);
         announce('Selected.');
       }
@@ -320,14 +320,11 @@
     }
 
     function moveBallToSlot(ballEl, slotEl){
+      // compute from CURRENT rendered centers
       const b = ballEl.getBoundingClientRect();
       const s = slotEl.getBoundingClientRect();
-      const bcx = b.left + b.width/2;
-      const bcy = b.top  + b.height/2;
-      const scx = s.left + s.width/2;
-      const scy = s.top  + s.height/2;
-      const dx = (scx - bcx);
-      const dy = (scy - bcy);
+      const dx = (s.left + s.width/2) - (b.left + b.width/2);
+      const dy = (s.top  + s.height/2) - (b.top  + b.height/2);
 
       ballEl.style.setProperty('--tx', dx.toFixed(1) + 'px');
       ballEl.style.setProperty('--ty', dy.toFixed(1) + 'px');
@@ -340,30 +337,27 @@
 
       tray.classList.add('on');
 
-      // keep unpicked dim
       const allIds = ['R','B','G'];
       allIds.forEach(id=>{
         if(!selected.has(id)) balls[id].classList.add('dim');
         balls[id].classList.remove('selected');
       });
 
-      // move chosen into tray slots (order: R,B,G)
       const chosen = Array.from(selected).sort((a,b)=> ['R','B','G'].indexOf(a) - ['R','B','G'].indexOf(b));
       const first = chosen[0], second = chosen[1];
 
-      // wait a tick for tray to slide in, then compute deltas
+      // wait until tray finishes its slide animation so slot positions are final
       setTimeout(()=>{
         moveBallToSlot(balls[first], slot0);
         moveBallToSlot(balls[second], slot1);
         slot0.classList.add('filled');
         slot1.classList.add('filled');
-      }, 40);
+      }, 560);
 
       announce('Confirmed.');
       updateUI();
     }
 
-    // click handlers
     btns.forEach(b=>{
       b.addEventListener('click', ()=> toggleSelect(b.dataset.id));
       b.addEventListener('keydown', (e)=>{
@@ -377,15 +371,13 @@
     confirmBtn.addEventListener('click', confirm);
     resetBtn.addEventListener('click', resetAll);
 
-    // initial
     updateUI();
 
-    // keep tray move accurate on resize if locked
+    // recompute on resize if locked
     window.addEventListener('resize', ()=>{
       if(!locked) return;
       const chosen = Array.from(selected).sort((a,b)=> ['R','B','G'].indexOf(a) - ['R','B','G'].indexOf(b));
       if(chosen.length !== 2) return;
-      // recompute
       moveBallToSlot(balls[chosen[0]], slot0);
       moveBallToSlot(balls[chosen[1]], slot1);
     });
